@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -28,15 +30,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Whatshot
 import com.mindforge.app.domain.model.*
 import com.mindforge.app.domain.repository.MindForgeRepository
 import com.mindforge.app.domain.usecase.GenerateDailyChallengeUseCase
 import com.mindforge.app.domain.usecase.SubmitGameResultUseCase
 import com.mindforge.app.games.*
 import com.mindforge.app.ui.components.*
-import com.mindforge.app.ui.theme.FlameColor
-import com.mindforge.app.ui.theme.categoryColor
 import com.mindforge.app.utils.DateUtils
 import com.mindforge.app.utils.SeedUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -336,43 +335,42 @@ private fun GameScreen(
                 }
                 item {
                     QuestionCard {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            SectionHeader(
-                                title = round.gameType.title,
-                                subtitle = round.prompt,
-                                modifier = Modifier.weight(1f)
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = round.gameType.title,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.Black.copy(alpha = 0.9f)
+                                )
+                                Text(
+                                    text = parseMarkdown(round.prompt),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    lineHeight = 24.sp
+                                )
+                            }
                             
-                            Column(horizontalAlignment = Alignment.End) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Rounded.Whatshot, null, tint = FlameColor, modifier = Modifier.size(16.dp))
-                                    Text(
-                                        text = state.categoryStreak.toString(),
-                                        fontWeight = FontWeight.Black,
-                                        color = FlameColor,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                                Text("Streak", fontSize = 10.sp, color = Color.Gray)
+                            HorizontalDivider(color = Color.Black.copy(alpha = 0.05f))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Time Left",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.Black.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "${timeLeft}s",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        StreakIndicator(
-                            activeDays = state.weeklyActivity,
-                            accentColor = round.gameType.category?.let { categoryColor(it) } ?: MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Black.copy(alpha = 0.05f))
-                        
-                        InfoLine(label = "Difficulty", value = state.session?.difficulty?.label ?: "")
-                        InfoLine(label = "Time Left", value = "${timeLeft}s")
-                        InfoLine(label = "Score", value = state.score.toString())
                     }
                 }
                 item {
@@ -494,6 +492,7 @@ private fun TextEntryContent(round: TextEntryRound, timeRatio: Float, viewModel:
     
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val focusRequester = remember { FocusRequester() }
     
     val isNumberGame = round.gameType == GameType.NUMBER_RECALL || 
                        round.gameType == GameType.QUICK_MATH || 
@@ -517,6 +516,14 @@ private fun TextEntryContent(round: TextEntryRound, timeRatio: Float, viewModel:
             isRevealPhase = false
         }
     }
+
+    LaunchedEffect(isRevealPhase) {
+        if (!isRevealPhase) {
+            delay(100)
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
     
     if (isRevealPhase) {
         Text(
@@ -531,7 +538,7 @@ private fun TextEntryContent(round: TextEntryRound, timeRatio: Float, viewModel:
         OutlinedTextField(
             value = value,
             onValueChange = { value = it },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             label = { Text("Type answer") },
             shape = RoundedCornerShape(16.dp),
             keyboardOptions = KeyboardOptions(

@@ -7,23 +7,20 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.EmojiEvents
-import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -31,26 +28,24 @@ import com.mindforge.app.domain.model.GameHistory
 import com.mindforge.app.domain.model.GameType
 import com.mindforge.app.domain.repository.MindForgeRepository
 import com.mindforge.app.ui.theme.BackgroundLight
-import com.mindforge.app.ui.theme.FlameColor
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
 @HiltViewModel
 class ResultViewModel @Inject constructor(
-    private val repository: MindForgeRepository
+    private val repository: MindForgeRepository,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    fun getFilteredTopScores(gameId: String, difficulty: String): StateFlow<List<GameHistory>> =
-        repository.observeFilteredTopScores(gameId, difficulty)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyOf()
-            )
+    private val gameId: String = savedStateHandle.get<String>("gameId").orEmpty()
+    private val difficulty: String = savedStateHandle.get<String>("difficulty").orEmpty()
 
-    private fun <T> emptyOf(): List<T> = emptyList()
+    val topScores: StateFlow<List<GameHistory>> = repository.observeFilteredTopScores(gameId, difficulty)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 }
 
 @Composable
@@ -65,7 +60,7 @@ fun ResultRoute(
     onDone: () -> Unit,
     viewModel: ResultViewModel = hiltViewModel()
 ) {
-    val topScores by viewModel.getFilteredTopScores(gameId, difficulty).collectAsStateWithLifecycle()
+    val topScores by viewModel.topScores.collectAsStateWithLifecycle()
     
     ResultScreen(
         gameId = gameId,
@@ -91,7 +86,7 @@ private fun ResultScreen(
     topScores: List<GameHistory>,
     onDone: () -> Unit
 ) {
-    val gameTitle = GameType.fromId(gameId).title
+    val gameTitle = remember(gameId) { GameType.fromId(gameId).title }
 
     Scaffold(
         containerColor = BackgroundLight,
@@ -125,12 +120,6 @@ private fun ResultScreen(
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
             )
-            Text(
-                text = "Difficulty filtered for better accuracy",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            )
             
             Surface(
                 modifier = Modifier
@@ -140,34 +129,40 @@ private fun ResultScreen(
                 shape = RoundedCornerShape(24.dp),
                 shadowElevation = 2.dp
             ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val displayedScores = topScores.take(10)
-                    itemsIndexed(displayedScores) { index, entry ->
-                        val entryRank = index + 1
-                        ScoreboardRow(
-                            rank = entryRank,
-                            score = entry.score,
-                            isCurrent = (entryRank == rank && entry.score == score),
-                            difficulty = entry.difficulty
-                        )
+                if (topScores.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
                     }
-                    
-                    if (rank > 10) {
-                        item {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Text("...", color = Color.Gray, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        item {
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val displayedScores = topScores.take(10)
+                        itemsIndexed(displayedScores) { index, entry ->
+                            val entryRank = index + 1
                             ScoreboardRow(
-                                rank = rank,
-                                score = score,
-                                isCurrent = true,
-                                difficulty = "current"
+                                rank = entryRank,
+                                score = entry.score,
+                                isCurrent = (entryRank == rank && entry.score == score),
+                                difficulty = entry.difficulty
                             )
+                        }
+                        
+                        if (rank > 10) {
+                            item {
+                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    Text("...", color = Color.Gray, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            item {
+                                ScoreboardRow(
+                                    rank = rank,
+                                    score = score,
+                                    isCurrent = true,
+                                    difficulty = "current"
+                                )
+                            }
                         }
                     }
                 }
