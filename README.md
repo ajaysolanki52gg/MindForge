@@ -11,7 +11,7 @@ MindForge is a comprehensive, offline-first brain training application designed 
 ## 📸 App Showcase
 
 <p align="center">
-  <img src="app/src/main/res/drawable/min-forge-app.png" width="800" alt="MindForge Feature Image">
+  <img src="app/src/main/res/drawable/min-forge-app.png" width="80" alt="MindForge Feature Image">
 </p>
 
 ### Explore the Interface
